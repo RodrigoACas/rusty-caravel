@@ -1,2 +1,5 @@
 /target/*
 /cross-compiling-tools/raspberry/*
+cross-compiling-tools/arm-linux-gnueabihf-gcc-10.exe
+cross-compiling-tools/arm-linux-gnueabihf-gcc-8.exe
+cross-compiling-tools/raspberry-gcc10.2.1.exe
