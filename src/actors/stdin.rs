@@ -21,6 +21,7 @@ enum SubCommand {
     Send(Send),
     Receive(Receive),
     Exit(Exit),
+    GenTest(Test),
 }
 
 #[derive(Parser)]
@@ -37,6 +38,11 @@ struct Exit {}
 struct Receive {
     id: Option<String>,
     nr_of_messages: Option<String>,
+}
+
+#[derive(Parser)]
+struct Test {
+    file_path: String,
 }
 
 #[derive(Debug)]
@@ -102,6 +108,10 @@ impl StdInLines {
                 self.tell_monitor().await;
                 false
             }
+            SubCommand::GenTest(t) => {
+                println!("File path is: {}", t.file_path);
+                true
+            }
         }
     }
 }
@@ -166,7 +176,7 @@ impl StdInLinesHandle {
         let actor = StdInLines::new(inbox, monitor);
 
         tokio::spawn(run(actor));
-
+        
         Self { inbox: tx }
     }
 
