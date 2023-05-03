@@ -1,13 +1,14 @@
+use log::info;
 use tokio::sync::mpsc;
-use crate::util::testgen_util::{self, exec_test};
+use crate::util::testgen_util::{self};
 
 enum TestGenMessages{
     FilePath {
         file_path: String,
     },
 }
-pub struct TestGen{
-    receiver: mpsc::Sender<TestGenMessages>,
+struct TestGen{
+    receiver: mpsc::Receiver<TestGenMessages>,
 }
 
 impl TestGen {
@@ -15,12 +16,12 @@ impl TestGen {
         Self {receiver}
     }
 
-    async fn handle_message(msg: TestGenMessages) {
+    async fn handle_message(&self, msg: TestGenMessages) {
         match msg {
             TestGenMessages::FilePath {
                 file_path
             } => {
-                exec_test(file_path);
+                testgen_util::exec_test(file_path);
             }
         }
     }

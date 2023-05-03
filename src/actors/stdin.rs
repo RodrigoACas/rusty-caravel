@@ -80,7 +80,7 @@ impl StdInLines {
 
     async fn handle_command(&mut self, msg: String) -> bool {
         let words = shell_words::split(&msg).expect("cmd split went bust");
-
+        
         let cmd: Opts = match Opts::try_parse_from(words) {
             Ok(opts) => opts,
             Err(error) => {
