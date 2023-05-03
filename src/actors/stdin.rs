@@ -1,4 +1,7 @@
 use super::monitor::MonitorHandle;
+use super::sender_can::SenderCANHandle;
+use super::receiver_can::ReceiverCANHandle;
+
 use shell_words;
 use tokio::sync::mpsc;
 
@@ -58,7 +61,10 @@ struct StdInLines {
 
 impl StdInLines {
     fn new(inbox: mpsc::Receiver<Messages>, monitor: MonitorHandle) -> Self {
-        StdInLines { inbox, monitor }
+        StdInLines { 
+            inbox, 
+            monitor,
+        }
     }
 
     async fn tell_monitor(&self) {
@@ -104,14 +110,15 @@ impl StdInLines {
                 //self.receiver.receive_can_msg(t.id, t.nr_of_messages).await;
                 true
             }
-            SubCommand::Exit(_t) => {
-                self.tell_monitor().await;
-                false
-            }
             SubCommand::GenTest(t) => {
                 println!("File path is: {}", t.file_path);
                 true
             }
+            SubCommand::Exit(_t) => {
+                self.tell_monitor().await;
+                false
+            }
+           
         }
     }
 }

@@ -7,7 +7,8 @@ use super::sender_can::SenderCANHandle;
 use super::stdin::StdInLinesHandle;
 
 #[derive(Debug)]
-enum MonitorMessages {
+enum 
+MonitorMessages {
     SpawnCtrlC,
     SpawnConsole,
     SpawnSender,
@@ -23,7 +24,7 @@ pub struct Monitor {
     shutdown: watch::Sender<bool>,
     ctrlc_actor: Option<CtrlCActorHandle>,
     console_actor: Option<StdInLinesHandle>,
-    can_senders: Vec<SenderCANHandle>,
+    // can_senders: Vec<SenderCANHandle>,
     inbox: mpsc::Receiver<MonitorMessages>,
 }
 
@@ -33,14 +34,14 @@ impl Monitor {
         shutdown: watch::Sender<bool>,
         handler: MonitorHandle,
     ) -> Self {
-        let can_senders = Vec::new();
+        // let can_senders = Vec::new();
 
         Monitor {
             handler,
             shutdown,
             ctrlc_actor: None,
             console_actor: None,
-            can_senders,
+            // can_senders,
             inbox,
         }
     }
@@ -68,11 +69,11 @@ impl Monitor {
                 true
             }
 
-            MonitorMessages::SpawnSender => {
-                let sender = SenderCANHandle::new();
-                self.can_senders.push(sender);
-                true
-            }
+            // MonitorMessages::SpawnSender => {
+            //     let sender = SenderCANHandle::new();
+            //     self.can_senders.push(sender);
+            //     true
+            // }
 
             MonitorMessages::SpawnConsole => {
                 let sender = StdInLinesHandle::new(self.handler.clone());
