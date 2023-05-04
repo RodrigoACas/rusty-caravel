@@ -1,6 +1,8 @@
 use super::monitor::MonitorHandle;
 use super::sender_can::SenderCANHandle;
 use super::receiver_can::ReceiverCANHandle;
+use super::test_gen::TestGenHandle;
+
 
 use shell_words;
 use tokio::sync::mpsc;
@@ -57,13 +59,22 @@ enum Messages {
 struct StdInLines {
     inbox: mpsc::Receiver<Messages>,
     monitor: MonitorHandle,
+    sendercan_handle: SenderCANHandle,
+    receivercan_handle: ReceiverCANHandle,
+    testgen_handle: TestGenHandle,
 }
 
 impl StdInLines {
     fn new(inbox: mpsc::Receiver<Messages>, monitor: MonitorHandle) -> Self {
+        sendercan_handle = SenderCANHandle::new();
+        receivercan_handle = ReceiverCANHandle::new();
+        testgen_handle = TestGenHandle::new();
         StdInLines { 
             inbox, 
             monitor,
+            sendercan_handle,
+            receivercan_handle,
+            testgen_handle, 
         }
     }
 
@@ -91,12 +102,13 @@ impl StdInLines {
 
         match cmd.subcmd {
             SubCommand::Send(t) => {
-                //let id: u32 = t.id.parse().expect("TODO handle errors"); // Parse into number
+                let id: u32 = t.id.parse().expect("TODO handle errors"); // Parse into number
 
-                //let message: u64 = t.message.parse().expect("TODO handle errors");
+                let message: u64 = t.message.parse().expect("TODO handle errors");
 
-                //let cycletime: u64 = t.cycletime.parse().expect("TODO handle errors");
+                let cycle_time: u64 = t.cycletime.parse().expect("TODO handle errors");
 
+                self.sendercan_handle.send_can_message(id, message, cycle_time);
                 //if cycletime == 0 {
                 //    self.sender.send_can_message(id, message, cycletime).await;
                 //    true
@@ -165,7 +177,7 @@ fn reading_stdin_lines(sender: mpsc::Sender<Messages>) {
 }
 
 pub struct StdInLinesHandle {
-    inbox: mpsc::Sender<Messages>,
+    sender: mpsc::Sender<Messages>,
 }
 
 impl StdInLinesHandle {
@@ -176,15 +188,18 @@ impl StdInLinesHandle {
         //receiver: ReceiverCANHandle
         monitor: MonitorHandle,
     ) -> StdInLinesHandle {
-        let (tx, inbox) = tokio::sync::mpsc::channel(5);
+        let (sender, inbox) = tokio::sync::mpsc::channel(5);
 
         reading_stdin_lines(tx.clone());
 
         let actor = StdInLines::new(inbox, monitor);
+        
 
         tokio::spawn(run(actor));
         
-        Self { inbox: tx }
+        Self { 
+            sender,
+        }
     }
 
     pub async fn shutdown(&self) {
