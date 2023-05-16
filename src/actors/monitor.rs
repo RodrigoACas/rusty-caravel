@@ -3,7 +3,6 @@ use log::info;
 use tokio::sync::{mpsc, watch};
 
 use super::ctrlc::CtrlCActorHandle;
-use super::sender_can::SenderCANHandle;
 use super::stdin::StdInLinesHandle;
 
 #[derive(Debug)]
@@ -11,12 +10,8 @@ enum
 MonitorMessages {
     SpawnCtrlC,
     SpawnConsole,
-    SpawnSender,
-    AddToMonitor,
-    RemoveFromMonitor,
     UglyExit,
     CleanExit,
-    Exit,
 }
 
 pub struct Monitor {
@@ -48,11 +43,7 @@ impl Monitor {
 
     fn handle_message(&mut self, msg: MonitorMessages) -> bool {
         match msg {
-            MonitorMessages::Exit => {
-                self.shutdown.send(true);
-                false
-            }
-
+            
             MonitorMessages::UglyExit => {
                 self.ctrlc_actor = None;
                 false
@@ -138,16 +129,6 @@ impl MonitorHandle {
     pub async fn wait_to_die_like_in_life(&mut self) {
         self.shutdown.changed().await.unwrap();
     }
-
-    /*
-    pub async fn shutdown(&self) -> Result<()> {
-        let msg = MonitorMessages::Exit;
-
-        self.inbox.send(msg).await.expect("failed to send message");
-
-        Ok(())
-    }
-    */
 
     pub async fn ctrl_c_received(&self) -> Result<()> {
         let msg = MonitorMessages::UglyExit;

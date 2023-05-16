@@ -1,0 +1,23 @@
+{
+    "TestSuitName":"0x29 Service",
+    "Tests":[
+      {
+        "TestName":"Minimum Length Check",
+        "Sequence":[
+          {
+            "PairArray":["Req","0x29","0x01","Res","0x13"]
+          }
+        ]
+      },
+      {
+        "TestName":"Happy Path",
+        "Sequence":[
+          {
+            "RequestArray":["0x29","0x01"],
+            "certificateClient":"client_certificate.der",    
+            "ResponseArray":["0x69","0x01"]
+          }
+        ]
+      }
+    ]
+}

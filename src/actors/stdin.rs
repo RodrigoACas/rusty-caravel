@@ -66,9 +66,9 @@ struct StdInLines {
 
 impl StdInLines {
     fn new(inbox: mpsc::Receiver<Messages>, monitor: MonitorHandle) -> Self {
-        sendercan_handle = SenderCANHandle::new();
-        receivercan_handle = ReceiverCANHandle::new();
-        testgen_handle = TestGenHandle::new();
+        let sendercan_handle = SenderCANHandle::new();
+        let receivercan_handle = ReceiverCANHandle::new();
+        let testgen_handle = TestGenHandle::new();
         StdInLines { 
             inbox, 
             monitor,
@@ -108,7 +108,7 @@ impl StdInLines {
 
                 let cycle_time: u64 = t.cycletime.parse().expect("TODO handle errors");
 
-                self.sendercan_handle.send_can_message(id, message, cycle_time);
+                self.sendercan_handle.send_can_message(id, message, cycle_time).await;
                 //if cycletime == 0 {
                 //    self.sender.send_can_message(id, message, cycletime).await;
                 //    true
@@ -119,11 +119,11 @@ impl StdInLines {
                 true
             }
             SubCommand::Receive(t) => {
-                //self.receiver.receive_can_msg(t.id, t.nr_of_messages).await;
+                self.receivercan_handle.receive_can_msg(t.id, t.nr_of_messages).await;
                 true
             }
             SubCommand::GenTest(t) => {
-                println!("File path is: {}", t.file_path);
+                self.testgen_handle.send_test(t.file_path).await;
                 true
             }
             SubCommand::Exit(_t) => {
@@ -190,7 +190,7 @@ impl StdInLinesHandle {
     ) -> StdInLinesHandle {
         let (sender, inbox) = tokio::sync::mpsc::channel(5);
 
-        reading_stdin_lines(tx.clone());
+        reading_stdin_lines(sender.clone());
 
         let actor = StdInLines::new(inbox, monitor);
         
@@ -205,6 +205,6 @@ impl StdInLinesHandle {
     pub async fn shutdown(&self) {
         let msg = Messages::Shutdown;
 
-        self.inbox.try_send(msg).expect("What ?");
+        self.sender.try_send(msg).expect("What ?");
     }
 }
