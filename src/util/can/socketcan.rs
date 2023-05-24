@@ -1,3 +1,5 @@
+#![allow(unused_imports)]
+
 use log::{debug, error, info, Level};
 use anyhow::{Result, anyhow};
 use futures_util::stream::StreamExt;
@@ -15,4 +17,8 @@ pub async fn send_can_frame(socket: &CANSocket, frame: CANFrame) {
         }
     }
 
+}
+
+pub async fn receive_can_frame(socket: &CANSocket) -> Result<CANFrame>{
+    
 }

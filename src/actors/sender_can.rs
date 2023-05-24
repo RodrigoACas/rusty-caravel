@@ -43,7 +43,7 @@ impl SenderCAN {
                 _cycle_time: _,
             } => {
                 let frame = CANFrame::new(id, &message.to_be_bytes(), false, false).unwrap();
-                canutil::send_can_frame(&self.socket, frame).await;
+                self.socket.send_can_frame(frame).await;
             }
         }
     }

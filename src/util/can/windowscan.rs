@@ -48,6 +48,17 @@ impl CANSocket {
     pub fn open(ifname: &str) -> Result<Self> {
         Ok(CANSocket{ifname: String::from_str(ifname)?})
     }
+    pub async fn send_can_frame(&self, frame: CANFrame) {
+        info!("[MOCK] [{}] Write {}", self, frame);
+    }
+    
+    pub async fn receive_can_frame(&self) -> Result<CANFrame>{
+        Ok(CANFrame { 
+            id: 0, 
+            data_len: 1, 
+            data: [0,1,2,3,4,5,6,7] 
+        })
+    }
 }
 
 impl fmt::Display for CANSocket {
@@ -56,6 +67,3 @@ impl fmt::Display for CANSocket {
     }
 }
 
-pub async fn send_can_frame(socket: &CANSocket, frame: CANFrame) {
-    info!("[MOCK] [{}] Write {}", socket, frame);
-}
