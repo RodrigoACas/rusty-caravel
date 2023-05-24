@@ -2,22 +2,58 @@
     "TestSuitName":"0x29 Service",
     "Tests":[
       {
-        "TestName":"Minimum Length Check",
         "Sequence":[
           {
-            "PairArray":["Req","0x29","0x01","Res","0x13"]
+            "TestName":"Minimum Length Error Check"
+          },
+          {
+            "PairArray":["0x29","0x01","Res","0x7F","0x29","0x13"]
           }
         ]
       },
       {
-        "TestName":"Happy Path",
         "Sequence":[
           {
-            "RequestArray":["0x29","0x01"],
-            "certificateClient":"client_certificate.der",    
-            "ResponseArray":["0x69","0x01"]
+            "TestName":"Total Length Error Check"
+          },
+          {
+            "PairArray":["0x29","0x01","0x00","0x08","0x00","client_certificate.der","0x00","0x00","Res", "0x7F", "0x29", "0x13"]
+          }
+        ]
+      },
+      {
+        "Sequence":[
+          {
+            "TestName":"Sequence Error Check"
+          },
+          {
+            "PairArray":["0x29","0x03","0x00","0x02","0x12","0x34","0x00","0x00","Res","0x7F","0x29","0x24"]
+          }
+        ]
+      },
+      {
+        "Sequence":[
+          {
+            "TestName":"Invalid Certificate Error Check"
+          },
+          {
+            "PairArray":["0x29","0x01","0x00","0x00","0x02","0x00","0x00","0x00","0x00","Res","0x7F","0x29","0x22"]
+          }
+        ]
+      },
+      {
+        "Sequence":[
+          {
+            "TestName":"Happy Path"
+          },
+          {
+            "PairArray":["0x29","0x01","0x00","0x08","0x00","client_certificate.der","0x00","0x00","Res","0x69","0x01","0x11","0xY","0xY","CHALLENGE SERVER","0x00","0x00"]
+          },
+          {
+            "PairArray":["0x29","0x03","0x00","0x02","0x12","0x34","0x00","Res","0x69","0x03","0x12","0x00","0x00"]
           }
         ]
       }
+      
     ]
 }
