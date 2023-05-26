@@ -72,7 +72,6 @@ impl Monitor {
                 true
             }
 
-            _ => true,
         }
     }
 }

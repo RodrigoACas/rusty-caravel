@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::fs::{File, self};
 use hex;
 use std::io::{Read};
@@ -22,16 +23,13 @@ pub async fn exec_test(file_path: String) -> Result<()>{
 }
 
 #[async_recursion]
-async fn process_json(json: Value, key_op:Option<String>) -> Result<Option<String>>{
+async fn process_json(json: Value, key_op:Option<String>) -> Result<()>{
     match json {
         Value::String(value) => {
             if let Some(key) = key_op {
                 match key.as_str() {
                     "TestSuitName" => {
                         info!("Initiating tests to {value}");
-                    }
-                    "TestName" => {
-                        info!("Initiating test {value}");
                     }
                     _ => {}
                 }
@@ -46,66 +44,123 @@ async fn process_json(json: Value, key_op:Option<String>) -> Result<Option<Strin
                         }
                     }
                     "Sequence" => {
-                        for value in values {
-                            process_json(value, None).await?;
-                        }
+                        process_sequence(values).await.expect("Failed at processing sequence");                        
+                                                
                     }
-                    "PairArray" => {
-                        let mut divide: bool = false;
-                        let mut request_vec: Vec<String>=Vec::new();
-                        let mut response_vec: Vec<String>=Vec::new();
+                    // "PairArray" => {
+                    //     let mut divide: bool = false;
+                    //     let mut request_vec: Vec<String>=Vec::new();
+                    //     let mut response_vec: Vec<String>=Vec::new();
 
-                        for value in values {
-                            if let Value::String(string) = value {
-                                if string == "Res" {
-                                    divide=true;
-                                    continue;
-                                }
+                    //     for value in values {
+                    //         if let Value::String(string) = value {
+                    //             if string == "Res" {
+                    //                 divide=true;
+                    //                 continue;
+                    //             }
 
-                                if divide {
-                                    response_vec.push(string);
-                                }
-                                else{
-                                    request_vec.push(string);
-                                }
-                            }
-                        }
-                        process_request(request_vec).await?;
-                        process_response(response_vec).await?;                        
-                    }
+                    //             if divide {
+                    //                 response_vec.push(string);
+                    //             }
+                    //             else{
+                    //                 request_vec.push(string);
+                    //             }
+                    //         }
+                    //     }
+                        
+                    //     process_request(request_vec, Some(&mut map)).await?;
+                    //     process_response(response_vec, Some(&mut map)).await?;    
+                        
+                                            
+                    // }
                     _ => {}
                 }
             }
             
         }
         Value::Object(obj) => {
-            // Handle object value
             for (key, value) in obj {
                 process_json(value, Some(key)).await?;
-            }
+            } 
         }
         _ => {}
     }
     
-    Ok(None)
+    Ok(())
 }
 
-async fn process_request(request_vec: Vec<String>) -> Result<()>{
+async fn process_sequence(objects: Vec<Value>) -> Result<()> {
+    let mut vars: HashMap<String, Vec<u8>> = HashMap::new();
+    
+    for object in objects {
+        if let Value::Object(obj) = object {
+            for (_key, value) in obj {
+                if let Value::String(string) = value {
+                    info!("Initiating test {string}");       
+                }
+                else if let Value::Array(elems) = value {
+                    let mut divide: bool = false;
+                    let mut request_vec: Vec<String>=Vec::new();
+                    let mut response_vec: Vec<String>=Vec::new();
+
+                    for elem in elems {
+                        if let Value::String(string) = elem {
+                            if string == "Res" {
+                                divide=true;
+                                continue;
+                            }
+
+                            if divide {
+                                response_vec.push(string);
+                            }
+                            else{
+                                request_vec.push(string);
+                            }
+                        }
+                    }
+                    
+                    process_request(request_vec, &mut vars).await?;
+                    process_response(response_vec, &mut vars).await?;    
+                    
+                }
+            } 
+        }
+    }
+
+    Ok(())
+}
+
+async fn process_request(request_vec: Vec<String>, variables:&mut HashMap<String, Vec<u8>>) -> Result<()>{
     let mut can_frame_vec: Vec<u8>= Vec::new();
 
     for value in request_vec {
         if value.starts_with("0x"){
             can_frame_vec.push(u8::from_str_radix(&value[2..], 16).unwrap());
         }
-
-        if value.ends_with(".der"){
+        else if value.ends_with(".der"){
             if !Path::new(&value).is_file() {
                 
             }
         
             let cert_string = fs::read_to_string(value).unwrap();
+            let cert_string= cert_string.replace("\r\n", "");
+            let cert_string= cert_string.replace(" ", "");
             let mut cert_vec: Vec<u8> = hex::decode(cert_string).unwrap();
             can_frame_vec.append(&mut cert_vec);
+        }
+        else if value.starts_with("LEN(RES(") {
+            let len_key = value.chars().count();
+            let key = value[8..len_key-1].to_owned();
+            let var = variables.get(&key).unwrap();
+
+            // Missing solving CHALLENGE in var
+            let mut sol=var.to_owned();
+
+            let len_var = sol.len() as u16;
+            can_frame_vec.push(((len_var & 65280)>>8) as u8);
+            can_frame_vec.push((len_var & 255) as u8);
+
+            can_frame_vec.append(&mut sol);
         }
 
     }
@@ -117,8 +172,7 @@ async fn process_request(request_vec: Vec<String>) -> Result<()>{
     Ok(())
 }
 
-async fn process_response(response_vec: Vec<String>) -> Result<()>{
-    let mut can_frame_vec: Vec<u8>= Vec::new();
+async fn process_response(response_vec: Vec<String>, variables:&mut HashMap<String, Vec<u8>>) -> Result<bool>{
     
     let socket = CANSocket::open("can0").expect("Couldn't open CAN socket");
    
@@ -126,24 +180,34 @@ async fn process_response(response_vec: Vec<String>) -> Result<()>{
     let frame = socket.receive_can_frame().await.unwrap();
     
     //After theoretical appending of all CAN frames (max data payolad of 8 bytes so entire message will be divided into multiple frames)
-    let message= frame;
-
+    let message= frame.get_data();
+    
+    
+    let mut i=0;
     for value in response_vec {
         if value.starts_with("0x"){
-            can_frame_vec.push(u8::from_str_radix(&value[2..], 16).unwrap());
+            let hex_value = u8::from_str_radix(&value[2..], 16).unwrap();  
+
+            if hex_value != message[i] {
+                return Ok(false);
+            }
         }
 
-        // if value.ends_with(".der"){
-        //     if !Path::new(&value).is_file() {
-                
-        //     }
-        
-        //     let cert_string = fs::read_to_string(value).unwrap();
-        //     let mut cert_vec: Vec<u8> = hex::decode(cert_string).unwrap();
-        //     can_frame_vec.append(&mut cert_vec);
-        // }
+        if value.starts_with("LEN(") {
+            let map_key = value[5..value.len()-1].to_owned();
+            let var_len=(message[i] as u16)<<8 | (message[i+1] as u16);
+            
+            let var_vec = message[i+2..=i+2+var_len as usize].to_owned();
+            i+=2+var_len as usize;
 
+            variables.insert(map_key, var_vec);
+
+            continue;
+        }
+
+
+        i+=1;
     }
 
-    Ok(())
+    Ok(true)
 }

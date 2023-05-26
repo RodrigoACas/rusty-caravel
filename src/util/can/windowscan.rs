@@ -30,6 +30,10 @@ impl CANFrame {
             data: tmp 
         })
     }
+
+    pub fn get_data(&self) -> [u8; 8] {
+        self.data
+    }
 }
 
 impl fmt::Display for CANFrame {

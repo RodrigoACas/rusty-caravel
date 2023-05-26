@@ -4,7 +4,6 @@
 
 use tokio::sync::mpsc;
 
-use crate::util::canutil;
 use crate::util::canutil::{CANFrame, CANSocket};
 
 use log::info;
