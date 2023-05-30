@@ -1,0 +1,18 @@
+{
+    "TestSuitName":"Debug",
+    "Tests":[
+      {
+        "Sequence":[
+          {
+            "TestName":"Challenge Debug"
+          },
+          {
+            "PairArray":["0x29","0x01","0x00","0x00","0x01","0x09","0x00","0x00","Response","0x69","RANGE(0x01,0x05)","0x11","LEN(CHA)","CHA","0x00","0x00"]
+          },
+          {
+            "PairArray":["0x29","0x03","LEN(RES(CHA))","RES(CHA)","0x00","0x00","Response","0x69","0x03","0x12","0x00","0x00"]
+          }
+        ]
+      }
+    ]
+}

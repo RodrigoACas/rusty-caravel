@@ -1,10 +1,11 @@
 use std::collections::HashMap;
 use std::fs::{File, self};
 use hex;
+use itertools::Itertools;
 use std::io::{Read};
 use std::path::{Path};
 use anyhow::Result;
-use log::{info};
+use log::{info, debug, error, warn};
 use serde_json::{self, Value};
 use async_recursion::async_recursion;
 
@@ -90,8 +91,10 @@ async fn process_json(json: Value, key_op:Option<String>) -> Result<()>{
 }
 
 async fn process_sequence(objects: Vec<Value>) -> Result<()> {
+    info!("Starting to process sequence");
+
     let mut vars: HashMap<String, Vec<u8>> = HashMap::new();
-    
+
     for object in objects {
         if let Value::Object(obj) = object {
             for (_key, value) in obj {
@@ -105,7 +108,7 @@ async fn process_sequence(objects: Vec<Value>) -> Result<()> {
 
                     for elem in elems {
                         if let Value::String(string) = elem {
-                            if string == "Res" {
+                            if string == "Response" {
                                 divide=true;
                                 continue;
                             }
@@ -120,7 +123,14 @@ async fn process_sequence(objects: Vec<Value>) -> Result<()> {
                     }
                     
                     process_request(request_vec, &mut vars).await?;
-                    process_response(response_vec, &mut vars).await?;    
+                    let res = process_response(response_vec, &mut vars).await?;
+                    if !res {
+                        info!("Messages didn't match");
+                    }
+                    else {
+                        info!("Messages matched");
+                    }
+                    
                     
                 }
             } 
@@ -150,7 +160,7 @@ async fn process_request(request_vec: Vec<String>, variables:&mut HashMap<String
         }
         else if value.starts_with("LEN(RES(") {
             let len_key = value.chars().count();
-            let key = value[8..len_key-1].to_owned();
+            let key = value[8..len_key-2].to_owned();
             let var = variables.get(&key).unwrap();
 
             // Missing solving CHALLENGE in var
@@ -165,48 +175,80 @@ async fn process_request(request_vec: Vec<String>, variables:&mut HashMap<String
 
     }
 
-    let frame = CANFrame::new(0, can_frame_vec.as_slice(), false, false).expect("Couldn't create CAN Frame");
-    let socket = CANSocket::open("can0").expect("Couldn't open CAN socket");
-    socket.send_can_frame(frame).await;
+    println!("Request frame: {:?}", can_frame_vec);
+
+    // let frame = CANFrame::new(0, can_frame_vec.as_slice(), false, false).expect("Couldn't create CAN Frame");
+    // let socket = CANSocket::open("can0").expect("Couldn't open CAN socket");
+    // socket.send_can_frame(frame).await;
 
     Ok(())
 }
 
 async fn process_response(response_vec: Vec<String>, variables:&mut HashMap<String, Vec<u8>>) -> Result<bool>{
     
-    let socket = CANSocket::open("can0").expect("Couldn't open CAN socket");
+    // let socket = CANSocket::open("can0").expect("Couldn't open CAN socket");
    
-    //Receives CAN Frame
-    let frame = socket.receive_can_frame().await.unwrap();
+    // //Receives CAN Frame
+    // let frame = socket.receive_can_frame().await.unwrap();
     
-    //After theoretical appending of all CAN frames (max data payolad of 8 bytes so entire message will be divided into multiple frames)
-    let message= frame.get_data();
+    // //After theoretical appending of all CAN frames (max data payolad of 8 bytes so entire message will be divided into multiple frames)
+    // let message= frame.get_data();
     
+    let message: Vec<u8> = vec![105, 3, 17, 0, 2, 1, 1, 0, 0];
+    // let message = message_vec.as_slice();
     
     let mut i=0;
-    for value in response_vec {
-        if value.starts_with("0x"){
-            let hex_value = u8::from_str_radix(&value[2..], 16).unwrap();  
+    'mainloop: for value in response_vec {
+        let mut acceptable_values: Vec<u8> = Vec::new();
+        let mut options: Vec<String> = Vec::new();
 
-            if hex_value != message[i] {
-                return Ok(false);
+        if value.contains('|') {
+            let value = value.replace(" ", "");
+
+            let values=  value.split("|").collect_vec();
+            for (j,val) in values.iter().enumerate() {
+                options.push(val[j*4+3..j*4+2].to_owned());
+            }
+
+        }
+        else {options.push(value);}
+
+        for option in options {
+            if option.starts_with("0x"){
+                acceptable_values.push(u8::from_str_radix(&option[2..], 16).expect("Unknown value {option}"));               
+            }
+            else if option.starts_with("LEN(") {
+                let map_key = option[4..option.len()-1].to_owned();
+                let var_len=(message[i] as u16)<<8 | (message[i+1] as u16);
+                
+                let var_vec = message[i+2..i+2+var_len as usize].to_owned();
+                i+=2+var_len as usize;
+    
+                variables.insert(map_key, var_vec);
+
+                continue 'mainloop;
+            }
+            else if option.starts_with("RANGE(") {
+                let lower = u8::from_str_radix(&option[8..10],16).unwrap();
+                let higher = u8::from_str_radix(&option[13..15], 16).unwrap();
+
+                for val in lower..=higher{
+                    acceptable_values.push(val);
+                }
+            }
+            else {
+                error!("Command {option} unknown");
+                continue 'mainloop;
             }
         }
 
-        if value.starts_with("LEN(") {
-            let map_key = value[5..value.len()-1].to_owned();
-            let var_len=(message[i] as u16)<<8 | (message[i+1] as u16);
-            
-            let var_vec = message[i+2..=i+2+var_len as usize].to_owned();
-            i+=2+var_len as usize;
-
-            variables.insert(map_key, var_vec);
-
-            continue;
+        for acc_value in acceptable_values {
+            if acc_value == message[i] {
+                i+=1;
+                continue 'mainloop;
+            }
         }
-
-
-        i+=1;
+        return Ok(false);
     }
 
     Ok(true)

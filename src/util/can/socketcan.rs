@@ -19,6 +19,6 @@ pub async fn send_can_frame(socket: &CANSocket, frame: CANFrame) {
 
 }
 
-pub async fn receive_can_frame(socket: &CANSocket) -> Result<CANFrame>{
+// pub async fn receive_can_frame(socket: &CANSocket) -> Result<CANFrame>{
     
-}
+// }
