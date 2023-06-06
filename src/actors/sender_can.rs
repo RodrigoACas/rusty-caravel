@@ -4,7 +4,7 @@
 
 use tokio::sync::mpsc;
 
-use crate::util::canutil::{CANFrame, CANSocket};
+use crate::util::canutil::{CANFrame, CANSocket, send_can_frame};
 
 use log::info;
 
@@ -25,7 +25,7 @@ struct SenderCAN {
 
 impl SenderCAN {
     fn new(receiver: mpsc::Receiver<SenderCANMessages>) -> Self {
-        let socket = CANSocket::open("can0").expect("yikes");
+        let socket = CANSocket::open("can0").expect("Panicked trying to open CAN socket");
 
         SenderCAN {
             socket,
@@ -42,7 +42,7 @@ impl SenderCAN {
                 _cycle_time: _,
             } => {
                 let frame = CANFrame::new(id, &message.to_be_bytes(), false, false).unwrap();
-                self.socket.send_can_frame(frame).await;
+                send_can_frame(&self.socket, frame).await;
             }
         }
     }

@@ -31,8 +31,11 @@ enum SubCommand {
 
 #[derive(Parser)]
 struct Send {
+    #[clap(short)]
     id: String,
+    #[clap(short)]
     message: String,
+    #[clap(short)]
     cycletime: String,
 }
 
@@ -102,9 +105,20 @@ impl StdInLines {
 
         match cmd.subcmd {
             SubCommand::Send(t) => {
-                let id: u32 = t.id.parse().expect("TODO handle errors"); // Parse into number
+                println!("id: {} message: {} cycletime: {}", t.id, t.message, t.cycletime);
+                let id = match u32::from_str_radix(t.id.as_str(),16) {
+                    Ok(number) => number,
+                    Err(e) => {
+                        panic!("Issue parsing number {} || Got error {}",  t.id,e);
+                    }
+                };
 
-                let message: u64 = t.message.parse().expect("TODO handle errors");
+                let message = match u64::from_str_radix(t.message.as_str(),16) {
+                    Ok(number) => number,
+                    Err(e) => {
+                        panic!("Issue parsing message {} || Got error {}",  t.message,e);
+                    }
+                };
 
                 let cycle_time: u64 = t.cycletime.parse().expect("TODO handle errors");
 

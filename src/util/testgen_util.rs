@@ -48,32 +48,6 @@ async fn process_json(json: Value, key_op:Option<String>) -> Result<()>{
                         process_sequence(values).await.expect("Failed at processing sequence");                        
                                                 
                     }
-                    // "PairArray" => {
-                    //     let mut divide: bool = false;
-                    //     let mut request_vec: Vec<String>=Vec::new();
-                    //     let mut response_vec: Vec<String>=Vec::new();
-
-                    //     for value in values {
-                    //         if let Value::String(string) = value {
-                    //             if string == "Res" {
-                    //                 divide=true;
-                    //                 continue;
-                    //             }
-
-                    //             if divide {
-                    //                 response_vec.push(string);
-                    //             }
-                    //             else{
-                    //                 request_vec.push(string);
-                    //             }
-                    //         }
-                    //     }
-                        
-                    //     process_request(request_vec, Some(&mut map)).await?;
-                    //     process_response(response_vec, Some(&mut map)).await?;    
-                        
-                                            
-                    // }
                     _ => {}
                 }
             }

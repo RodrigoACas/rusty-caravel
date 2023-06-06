@@ -48,12 +48,13 @@ pub struct CANSocket {
     ifname: String
 }
 
+pub async fn send_can_frame(socket: &CANSocket, frame: CANFrame) {
+    info!("[MOCK] [{}] Write {}", socket, frame);
+}
+
 impl CANSocket {
     pub fn open(ifname: &str) -> Result<Self> {
         Ok(CANSocket{ifname: String::from_str(ifname)?})
-    }
-    pub async fn send_can_frame(&self, frame: CANFrame) {
-        info!("[MOCK] [{}] Write {}", self, frame);
     }
     
     pub async fn receive_can_frame(&self) -> Result<CANFrame>{
