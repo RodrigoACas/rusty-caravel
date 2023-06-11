@@ -1,7 +1,6 @@
 //! Sender CAN actor
 //!
 //! Actor responsible for sending can messages into a can socket
-
 use tokio::sync::mpsc;
 
 use crate::util::canutil::{CANFrame, CANSocket, send_can_frame};

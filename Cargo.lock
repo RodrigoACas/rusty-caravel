@@ -87,6 +87,7 @@ dependencies = [
  "log",
  "serde_json",
  "shell-words",
+ "socketcan-isotp",
  "structopt",
  "tokio",
  "tokio-socketcan",
@@ -149,6 +150,15 @@ name = "either"
 version = "1.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7fcaabb2fef8c910e7f4c7ce9f67a1283a1715879a7c230ca9d6d1ae31f16d91"
+
+[[package]]
+name = "embedded-can"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "12719661dce6080d174aa0a9df1f61756022dc105c1761bcd37091a0ee5de635"
+dependencies = [
+ "nb",
+]
 
 [[package]]
 name = "env_logger"
@@ -368,6 +378,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "308cc39be01b73d0d18f82a0e7b2a3df85245f84af96fdddc5d202d27e47b86a"
 
 [[package]]
+name = "memoffset"
+version = "0.6.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5aa361d4faea93603064a027415f07bd8e1d5c88c9fbf68bf56a285428fd79ce"
+dependencies = [
+ "autocfg",
+]
+
+[[package]]
 name = "mio"
 version = "0.8.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -380,6 +399,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "nb"
+version = "1.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8d5439c4ad607c3c23abf66de8c8bf57ba8adcd1f129e699851a6e43935d339d"
+
+[[package]]
 name = "nix"
 version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -387,6 +412,18 @@ checksum = "bfb3ddedaa14746434a02041940495bf11325c22f6d36125d3bdd56090d50a79"
 dependencies = [
  "bitflags 0.4.0",
  "libc",
+]
+
+[[package]]
+name = "nix"
+version = "0.24.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fa52e972a9a719cecb6864fb88568781eb706bac2cd1d4f04a648542dbf78069"
+dependencies = [
+ "bitflags 1.3.2",
+ "cfg-if",
+ "libc",
+ "memoffset",
 ]
 
 [[package]]
@@ -598,8 +635,21 @@ dependencies = [
  "hex 0.2.0",
  "itertools 0.4.19",
  "libc",
- "nix",
+ "nix 0.5.1",
  "try_from",
+]
+
+[[package]]
+name = "socketcan-isotp"
+version = "1.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "84d79e9928f0b4423b132332eadccbf760d9386d5a48ad169314385b28bbdb48"
+dependencies = [
+ "bitflags 1.3.2",
+ "embedded-can",
+ "libc",
+ "nix 0.24.3",
+ "thiserror",
 ]
 
 [[package]]

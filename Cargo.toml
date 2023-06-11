@@ -22,3 +22,4 @@ hex = "0.4.3"
 
 [target.'cfg(not(target_os = "windows"))'.dependencies]
 tokio-socketcan = "0.3.0"
+socketcan-isotp = "1.0.1"

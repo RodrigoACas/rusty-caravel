@@ -3,16 +3,10 @@
 use log::{debug, error, info, Level};
 use anyhow::{Result, anyhow};
 use futures_util::stream::StreamExt;
-use std::process::Command;
 pub use tokio_socketcan::{CANFrame, CANSocket};
+use socketcan_isotp::{Id, IsoTpSocket};
 
 pub async fn send_can_frame(socket: &CANSocket, frame: CANFrame) {
-    Command::new("sudo")
-            .arg("ifconfig")
-            .arg("can0")
-            .arg("up")
-            .status();
-
     match socket.write_frame(frame).expect("Writing is busted").await {
         Ok(_) => {
             debug!("Wrote {:?} # {:?}", socket, frame);
@@ -24,6 +18,25 @@ pub async fn send_can_frame(socket: &CANSocket, frame: CANFrame) {
 
 }
 
+pub async fn send_isotp_frame(socket: IsoTpSocket, data: &[u8]) -> Result<()>{
+    match socket.write(data) {
+        Ok(_) => {
+            debug!("Wrote {:?}", data);
+        }
+        Err(e) => {
+            debug!("Failed writing # {:?} Error: {}", data, e);
+        }
+    }
+
+    Ok(())
+}
+
+pub async fn receive_isotp_frame(socket:IsoTpSocket) -> Result<&[u8]> {
+    match socket.read() {
+        Ok(val) => return Ok(val),
+        Err(e) => return e,
+    }
+}
 // pub async fn receive_can_frame(socket: &CANSocket) -> Result<CANFrame>{
     
 // }

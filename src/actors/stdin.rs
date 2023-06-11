@@ -132,8 +132,9 @@ impl StdInLines {
                 //}
                 true
             }
-            SubCommand::Receive(t) => {
-                self.receivercan_handle.receive_can_msg(t.id, t.nr_of_messages).await;
+            SubCommand::Receive(_t) => {
+                println!("Receive function is not implemented");
+                //self.receivercan_handle.receive_can_msg(t.id, t.nr_of_messages).await;
                 true
             }
             SubCommand::GenTest(t) => {

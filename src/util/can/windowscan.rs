@@ -5,7 +5,7 @@
 //! build this project on windows.
 
 use log::{info};
-use std::fmt;
+use std::{fmt, convert::TryInto};
 use anyhow::Result;
 
 use std::str::FromStr;
@@ -29,10 +29,6 @@ impl CANFrame {
             data_len: data.len() as u8,
             data: tmp 
         })
-    }
-
-    pub fn get_data(&self) -> [u8; 8] {
-        self.data
     }
 }
 
@@ -72,3 +68,57 @@ impl fmt::Display for CANSocket {
     }
 }
 
+///////////////////////////////////////////////// ISO-TP WRAPPER /////////////////////////////////////////
+pub enum Id {
+    Standard(StandardId),
+    Extended(ExtendedId),
+}
+
+pub struct StandardId(u16);
+pub struct ExtendedId(u32);
+
+impl StandardId {
+    pub fn new(raw :u16) -> Option<Self> {
+        return Some(Self(raw));
+    }
+}
+impl ExtendedId {
+    pub fn new(raw :u32) -> Option<Self> {
+        return Some(Self(raw));
+    }
+}
+impl From<StandardId> for Id {
+    #[inline]
+    fn from(id: StandardId) -> Self {
+        Id::Standard(id)
+    }
+}
+
+impl From<ExtendedId> for Id {
+    #[inline]
+    fn from(id: ExtendedId) -> Self {
+        Id::Extended(id)
+    }
+}
+pub struct IsoTpSocket {
+    ifname: String,
+    src: Id,
+    dest: Id,
+}
+impl IsoTpSocket {
+    pub fn open(ifname: &str, src:impl Into<Id>, dest: impl Into<Id>) -> Result<Self> {
+        Ok(Self { 
+            ifname:ifname.to_owned(), 
+            src: src.into(), 
+            dest: dest.into(),
+        })
+    }
+}
+pub async fn send_isotp_frame(socket: IsoTpSocket, data: &[u8]){
+    info!("[MOCK] [{}] Write {:?}", socket.ifname, data);
+}
+
+static MOCK: [u8;2] = [1,2];
+pub async fn receive_isotp_frame<'a>(socket: IsoTpSocket) -> Result<&'a [u8]> {
+    Ok(&MOCK)
+}

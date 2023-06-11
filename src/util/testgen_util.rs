@@ -9,7 +9,7 @@ use log::{info, debug, error, warn};
 use serde_json::{self, Value};
 use async_recursion::async_recursion;
 
-use super::canutil::{CANFrame, CANSocket};
+use super::canutil::{CANFrame, CANSocket, send_isotp_frame, IsoTpSocket, StandardId, receive_isotp_frame};
 
 pub async fn exec_test(file_path: String) -> Result<()>{
     let mut file = File::open(file_path).expect("Couldn't open test file");
@@ -121,12 +121,13 @@ async fn process_request(request_vec: Vec<String>, variables:&mut HashMap<String
         if value.starts_with("0x"){
             can_frame_vec.push(u8::from_str_radix(&value[2..], 16).unwrap());
         }
-        else if value.ends_with(".der"){
-            if !Path::new(&value).is_file() {
+        else if value.starts_with("FILE("){
+            let value_len=value.chars().count();
+            if !Path::new(&value[6..value_len]).is_file() {
                 
             }
         
-            let cert_string = fs::read_to_string(value).unwrap();
+            let cert_string = fs::read_to_string(&value[6..value_len]).unwrap();
             let cert_string= cert_string.replace("\r\n", "");
             let cert_string= cert_string.replace(" ", "");
             let mut cert_vec: Vec<u8> = hex::decode(cert_string).unwrap();
@@ -151,25 +152,27 @@ async fn process_request(request_vec: Vec<String>, variables:&mut HashMap<String
 
     println!("Request frame: {:?}", can_frame_vec);
 
-    // let frame = CANFrame::new(0, can_frame_vec.as_slice(), false, false).expect("Couldn't create CAN Frame");
-    // let socket = CANSocket::open("can0").expect("Couldn't open CAN socket");
-    // socket.send_can_frame(frame).await;
+    let socket = IsoTpSocket::open(
+        "can0",
+         StandardId::new(0x123).unwrap(), 
+         StandardId::new(0x321).unwrap(),
+    ).unwrap();
+    send_isotp_frame(socket, can_frame_vec.as_slice()).await;
 
     Ok(())
 }
 
 async fn process_response(response_vec: Vec<String>, variables:&mut HashMap<String, Vec<u8>>) -> Result<bool>{
+    let socket = IsoTpSocket::open(
+        "can0",
+         StandardId::new(0x123).unwrap(), 
+         StandardId::new(0x321).unwrap(),
+    ).unwrap();
+    let message = receive_isotp_frame(socket).await?;
     
-    // let socket = CANSocket::open("can0").expect("Couldn't open CAN socket");
-   
-    // //Receives CAN Frame
-    // let frame = socket.receive_can_frame().await.unwrap();
-    
-    // //After theoretical appending of all CAN frames (max data payolad of 8 bytes so entire message will be divided into multiple frames)
-    // let message= frame.get_data();
-    
-    let message: Vec<u8> = vec![105, 3, 17, 0, 2, 1, 1, 0, 0];
-    // let message = message_vec.as_slice();
+    ///////////////Testing/////////////////////
+    // let message: Vec<u8> = vec![105, 3, 17, 0, 2, 1, 1, 0, 0];
+    // // let message = message_vec.as_slice();
     
     let mut i=0;
     'mainloop: for value in response_vec {
