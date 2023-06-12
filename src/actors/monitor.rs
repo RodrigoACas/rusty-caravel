@@ -19,7 +19,6 @@ pub struct Monitor {
     shutdown: watch::Sender<bool>,
     ctrlc_actor: Option<CtrlCActorHandle>,
     console_actor: Option<StdInLinesHandle>,
-    // can_senders: Vec<SenderCANHandle>,
     inbox: mpsc::Receiver<MonitorMessages>,
 }
 
@@ -59,12 +58,6 @@ impl Monitor {
                 self.ctrlc_actor = Some(ctrlc);
                 true
             }
-
-            // MonitorMessages::SpawnSender => {
-            //     let sender = SenderCANHandle::new();
-            //     self.can_senders.push(sender);
-            //     true
-            // }
 
             MonitorMessages::SpawnConsole => {
                 let sender = StdInLinesHandle::new(self.handler.clone());
@@ -160,15 +153,4 @@ impl MonitorHandle {
 
         Ok(())
     }
-
-    /*
-
-       pub async fn spawn_sender(&self) -> Result<()> {
-           let msg = MonitorMessages::SpawnSender;
-
-           self.inbox.send(msg).await.expect("failed to send message");
-
-           Ok(())
-       }
-    */
 }

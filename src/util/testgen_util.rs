@@ -5,11 +5,11 @@ use itertools::Itertools;
 use std::io::{Read};
 use std::path::{Path};
 use anyhow::Result;
-use log::{info, debug, error, warn};
+use log::{info, error};
 use serde_json::{self, Value};
 use async_recursion::async_recursion;
 
-use super::canutil::{CANFrame, CANSocket, send_isotp_frame, IsoTpSocket, StandardId, receive_isotp_frame};
+use super::canutil::{send_isotp_frame, IsoTpSocket, StandardId, receive_isotp_frame};
 
 pub async fn exec_test(file_path: String) -> Result<()>{
     let mut file = File::open(file_path).expect("Couldn't open test file");
@@ -163,7 +163,7 @@ async fn process_request(request_vec: Vec<String>, variables:&mut HashMap<String
 }
 
 async fn process_response(response_vec: Vec<String>, variables:&mut HashMap<String, Vec<u8>>) -> Result<bool>{
-    let socket = IsoTpSocket::open(
+    let mut socket = IsoTpSocket::open(
         "can0",
          StandardId::new(0x123).unwrap(), 
          StandardId::new(0x321).unwrap(),
