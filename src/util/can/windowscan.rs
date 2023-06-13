@@ -69,22 +69,30 @@ impl fmt::Display for CANSocket {
 }
 
 ///////////////////////////////////////////////// ISO-TP WRAPPER /////////////////////////////////////////
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub enum Id {
     Standard(StandardId),
     Extended(ExtendedId),
 }
-
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub struct StandardId(u16);
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub struct ExtendedId(u32);
 
 impl StandardId {
     pub fn new(raw :u16) -> Option<Self> {
         return Some(Self(raw));
     }
+    pub fn new_unchecked(raw :u16) -> Self {
+        return Self(raw);
+    }
 }
 impl ExtendedId {
     pub fn new(raw :u32) -> Option<Self> {
         return Some(Self(raw));
+    }
+    pub fn new_unchecked(raw :u32) ->Self {
+        return Self(raw);
     }
 }
 impl From<StandardId> for Id {

@@ -8,8 +8,7 @@ use anyhow::Result;
 use log::{info, error};
 use serde_json::{self, Value};
 use async_recursion::async_recursion;
-
-use super::canutil::{send_isotp_frame, IsoTpSocket, StandardId, receive_isotp_frame};
+use super::canutil::{send_isotp_frame, IsoTpSocket, ExtendedId, StandardId, Id, receive_isotp_frame};
 
 pub async fn exec_test(file_path: String) -> Result<()>{
     let mut file = File::open(file_path).expect("Couldn't open test file");
@@ -17,14 +16,22 @@ pub async fn exec_test(file_path: String) -> Result<()>{
     file.read_to_string(&mut contents)?;
 
     let json: Value = serde_json::from_str(&contents)?;
-    process_json(json, None).await?;
+
+    let mut src: Id;
+    let mut dest: Id; 
+    if let Some(struc) = StandardId::new(0){
+        src=Id::Standard(struc);
+        dest=Id::Standard(struc.clone());
+    } else {panic!("Couldn't create ids");}
+    
+    process_json(json, None, &mut src, &mut dest).await?;
 
 
     Ok(())
 }
 
 #[async_recursion]
-async fn process_json(json: Value, key_op:Option<String>) -> Result<()>{
+async fn process_json(json: Value, key_op:Option<String>, src: &mut Id, dest: &mut Id) -> Result<()>{
     match json {
         Value::String(value) => {
             if let Some(key) = key_op {
@@ -32,7 +39,39 @@ async fn process_json(json: Value, key_op:Option<String>) -> Result<()>{
                     "TestSuitName" => {
                         info!("Initiating tests to {value}");
                     }
-                    _ => {}
+                    "ID" => {
+                        let ids= value.split(',').collect_vec();
+                        
+                        match ids[0] {
+                            "Extended" => {
+                                let src_struc_opt = ExtendedId::new(u32::from_str_radix(&ids[1][2..],16).unwrap());
+                                if let Some(src_struc) = src_struc_opt {
+                                    *src= Id::Extended(src_struc);
+                                } else {panic!("Panicked creating id from {}", ids[1])}
+                                
+                                let dest_struc_opt = ExtendedId::new(u32::from_str_radix(&ids[2][2..],16).unwrap());
+                                if let Some(dest_struc) = dest_struc_opt {
+                                    *dest = Id::Extended(dest_struc);
+                                } else {panic!("Panicked creating id from {}", ids[2])}
+                                
+                            }
+                            "Standard" => {
+                                let src_struc_opt = StandardId::new(u16::from_str_radix(&ids[1][2..],16).unwrap());
+                                if let Some(src_struc) = src_struc_opt {
+                                    *src= Id::Standard(src_struc);
+                                } else {panic!("Panicked creating id from {}", ids[1])}
+                                
+                                let dest_struc_opt = StandardId::new(u16::from_str_radix(&ids[2][2..],16).unwrap());
+                                if let Some(dest_struc) = dest_struc_opt {
+                                    *dest = Id::Standard(dest_struc);
+                                } else {panic!("Panicked creating id from {}", ids[2])}
+                            }
+                            _ => {
+                                panic!("Unknown ID type {}", ids[0]);
+                            }
+                        }
+                    }
+                    _ => {info!("Unknown key {}", key);}
                 }
             }
         }
@@ -41,11 +80,11 @@ async fn process_json(json: Value, key_op:Option<String>) -> Result<()>{
                 match key.as_str(){
                     "Tests" => {
                         for value in values{
-                            process_json(value, None).await?;
+                            process_json(value, None, src, dest).await?;
                         }
                     }
                     "Sequence" => {
-                        process_sequence(values).await.expect("Failed at processing sequence");                        
+                        process_sequence(values, src, dest).await.expect("Failed at processing sequence");                        
                                                 
                     }
                     _ => {}
@@ -55,7 +94,7 @@ async fn process_json(json: Value, key_op:Option<String>) -> Result<()>{
         }
         Value::Object(obj) => {
             for (key, value) in obj {
-                process_json(value, Some(key)).await?;
+                process_json(value, Some(key), src, dest).await?;
             } 
         }
         _ => {}
@@ -64,16 +103,18 @@ async fn process_json(json: Value, key_op:Option<String>) -> Result<()>{
     Ok(())
 }
 
-async fn process_sequence(objects: Vec<Value>) -> Result<()> {
+async fn process_sequence(objects: Vec<Value>, src: &mut Id, dest: &mut Id) -> Result<()> {
     info!("Starting to process sequence");
 
     let mut vars: HashMap<String, Vec<u8>> = HashMap::new();
+    let mut testname: String = "Placeholder Test Name".to_owned();
 
     for object in objects {
         if let Value::Object(obj) = object {
             for (_key, value) in obj {
                 if let Value::String(string) = value {
-                    info!("Initiating test {string}");       
+                    info!("Initiating test {string}");   
+                    testname=string;    
                 }
                 else if let Value::Array(elems) = value {
                     let mut divide: bool = false;
@@ -97,9 +138,12 @@ async fn process_sequence(objects: Vec<Value>) -> Result<()> {
                     }
                     
                     process_request(request_vec, &mut vars).await?;
-                    let res = process_response(response_vec, &mut vars).await?;
+                    let res = process_response(response_vec, &mut vars, src, dest).await?;
                     if !res {
                         info!("Messages didn't match");
+                        info!("Failed {}", testname);
+                        return Ok(());
+
                     }
                     else {
                         info!("Messages matched");
@@ -110,6 +154,7 @@ async fn process_sequence(objects: Vec<Value>) -> Result<()> {
             } 
         }
     }
+    info!("Passed {}", testname);
 
     Ok(())
 }
@@ -123,11 +168,11 @@ async fn process_request(request_vec: Vec<String>, variables:&mut HashMap<String
         }
         else if value.starts_with("FILE("){
             let value_len=value.chars().count();
-            if !Path::new(&value[6..value_len]).is_file() {
-                
+            if !Path::new(&value[5..value_len-1]).is_file() {
+                panic!("{} isn't a file", &value[5..value_len-1]);
             }
         
-            let cert_string = fs::read_to_string(&value[6..value_len]).unwrap();
+            let cert_string = fs::read_to_string(&value[5..value_len-1]).unwrap();
             let cert_string= cert_string.replace("\r\n", "");
             let cert_string= cert_string.replace(" ", "");
             let mut cert_vec: Vec<u8> = hex::decode(cert_string).unwrap();
@@ -150,7 +195,7 @@ async fn process_request(request_vec: Vec<String>, variables:&mut HashMap<String
 
     }
 
-    println!("Request frame: {:?}", can_frame_vec);
+    //println!("Request frame: {:?}", can_frame_vec);
 
     let socket = IsoTpSocket::open(
         "can0",
@@ -162,11 +207,13 @@ async fn process_request(request_vec: Vec<String>, variables:&mut HashMap<String
     Ok(())
 }
 
-async fn process_response(response_vec: Vec<String>, variables:&mut HashMap<String, Vec<u8>>) -> Result<bool>{
+async fn process_response(response_vec: Vec<String>, variables:&mut HashMap<String, Vec<u8>>, src:&mut Id, dest:&mut Id) -> Result<bool>{
+    dbg!("Ids that reached response: {:?} {:?}", &src, &dest);
+    
     let mut socket = IsoTpSocket::open(
         "can0",
-         StandardId::new(0x123).unwrap(), 
-         StandardId::new(0x321).unwrap(),
+        src.to_owned(), 
+        dest.to_owned(),
     ).unwrap();
     let message = receive_isotp_frame(socket).await?;
     

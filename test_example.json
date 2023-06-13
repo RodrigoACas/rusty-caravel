@@ -1,5 +1,6 @@
 {
     "TestSuitName":"0x29 Service",
+    "ID":"Extended,0x18DB33F1,0x18DAF100",
     "Tests":[
       {
         "Sequence":[

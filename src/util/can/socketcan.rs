@@ -4,7 +4,7 @@ use log::{debug, error, info, Level};
 use anyhow::{Result, anyhow};
 use futures_util::stream::StreamExt;
 pub use tokio_socketcan::{CANFrame, CANSocket};
-pub use socketcan_isotp::{Id, IsoTpSocket, StandardId};
+pub use socketcan_isotp::{Id, IsoTpSocket, StandardId, ExtendedId};
 
 pub async fn send_can_frame(socket: &CANSocket, frame: CANFrame) {
     match socket.write_frame(frame).expect("Writing is busted").await {
