@@ -1,9 +1,10 @@
 //! Sender CAN actor
 //!
 //! Actor responsible for sending can messages into a can socket
+
 use tokio::sync::mpsc;
 
-use crate::util::canutil::{CANFrame, CANSocket, send_can_frame};
+use crate::util::canutil::{CANFrame, CANSocket, send_can_frame, Id, IsoTpSocket, send_isotp_frame};
 
 use log::info;
 
@@ -11,10 +12,16 @@ use log::info;
 enum SenderCANMessages {
     SendToID {
         id: u32,
-        message: u64,
+        message: Vec<u8>,
         _cycle_time: u64,
     },
-}
+    SendIsotp {
+        src: Id,
+        dest: Id,
+        message: Vec<u8>,
+    }
+}  
+
 
 struct SenderCAN {
     socket: CANSocket,
@@ -35,13 +42,17 @@ impl SenderCAN {
 
     async fn handle_message(&mut self, msg: SenderCANMessages) {
         match msg {
-            SenderCANMessages::SendToID {
-                id,
-                message,
-                _cycle_time: _,
-            } => {
-                let frame = CANFrame::new(id, &message.to_be_bytes(), false, false).unwrap();
+            SenderCANMessages::SendToID { id, message, _cycle_time: _,} => {
+                let frame = CANFrame::new(id, message.as_slice(), false, false).unwrap();
                 send_can_frame(&self.socket, frame).await;
+
+            }
+
+            SenderCANMessages::SendIsotp { src, dest, message } => {
+                let socket = IsoTpSocket::open("can0", src, dest).expect("Couldn't open ISO-TP socket");
+
+                send_isotp_frame(socket, message.as_slice()).await;
+
             }
         }
     }
@@ -70,11 +81,21 @@ impl SenderCANHandle {
         Self { sender }
     }
 
-    pub async fn send_can_message(&self, id: u32, message: u64, _cycle_time: u64) {
+    pub async fn send_can_message(&self, id: u32, message: Vec<u8>, _cycle_time: u64) {
         let msg = SenderCANMessages::SendToID {
             id,
             message,
             _cycle_time,
+        };
+
+        let _ = self.sender.send(msg).await;
+    }
+
+    pub async fn send_isotp_message(&self, src: Id, dest:Id, message: Vec<u8>) {
+        let msg = SenderCANMessages::SendIsotp {
+            src,
+            dest,
+            message,
         };
 
         let _ = self.sender.send(msg).await;

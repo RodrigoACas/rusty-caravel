@@ -2,7 +2,7 @@ use super::monitor::MonitorHandle;
 use super::sender_can::SenderCANHandle;
 use super::receiver_can::ReceiverCANHandle;
 use super::test_gen::TestGenHandle;
-
+use crate::util::canutil::{ExtendedId, Id, StandardId};
 
 use shell_words;
 use tokio::sync::mpsc;
@@ -27,16 +27,30 @@ enum SubCommand {
     Receive(Receive),
     Exit(Exit),
     GenTest(Test),
+    SendIsotp(SendIsotp),
 }
 
 #[derive(Parser)]
 struct Send {
     #[clap(short)]
     id: String,
-    #[clap(short)]
-    message: String,
+    #[clap(short, multiple_values(true), max_values(8), min_values(1))]
+    message: Vec<String>,
     #[clap(short)]
     cycletime: String,
+}
+
+#[derive(Parser)]
+struct SendIsotp {
+    /// Id mode: 0/false for standard, 1/true for extended
+    #[clap(short)]
+    id_mode: String,
+    #[clap(short)]
+    src_id: String,
+    #[clap(short)]
+    dest_id: String,
+    #[clap(short, multiple_values(true), min_values(1))]
+    message: Vec<String>,
 }
 
 #[derive(Parser)]
@@ -104,8 +118,53 @@ impl StdInLines {
         };
 
         match cmd.subcmd {
+            SubCommand::SendIsotp(t) => {
+                let src:Id;
+                let dest:Id;
+                //Conversion from String to ID enum
+                if t.id_mode=="true" || t.id_mode=="1" {
+
+                    let src_struc_opt = ExtendedId::new(u32::from_str_radix(t.src_id.as_str(),16).unwrap());
+                    if let Some(src_struc) = src_struc_opt {
+                        src= Id::Extended(src_struc);
+                    } else {panic!("Panicked creating id from {}", t.src_id)}
+                    
+                    let dest_struc_opt = ExtendedId::new(u32::from_str_radix(t.dest_id.as_str(),16).unwrap());
+                    if let Some(dest_struc) = dest_struc_opt {
+                        dest = Id::Extended(dest_struc);
+                    } else {panic!("Panicked creating id from {}", t.dest_id)}
+                } 
+                else if t.id_mode=="false" || t.id_mode=="0" {
+                    let src_struc_opt = StandardId::new(u16::from_str_radix(t.src_id.as_str(),16).unwrap());
+                    if let Some(src_struc) = src_struc_opt {
+                        src= Id::Standard(src_struc);
+                    } else {panic!("Panicked creating id from {}", t.src_id)}
+                    
+                    let dest_struc_opt = StandardId::new(u16::from_str_radix(t.dest_id.as_str(),16).unwrap());
+                    if let Some(dest_struc) = dest_struc_opt {
+                        dest = Id::Standard(dest_struc);
+                    } else {panic!("Panicked creating id from {}", t.dest_id)}
+                }
+                else {
+                    info!("Unknown parameter {}", t.id_mode);
+                    return true;
+                }
+
+                let mut message: Vec<u8> = Vec::new();
+                for value in t.message {
+                    match u8::from_str_radix(value.as_str(),16) {
+                        Ok(number) => message.push(number),
+                        Err(e) => {
+                            panic!("Issue parsing message {} || Got error {}",  value,e);
+                        }
+                    };
+                }
+
+                self.sendercan_handle.send_isotp_message(src, dest, message).await;
+                true
+            }
             SubCommand::Send(t) => {
-                println!("id: {} message: {} cycletime: {}", t.id, t.message, t.cycletime);
+                println!("id: {} message: {:?} cycletime: {}", t.id, t.message, t.cycletime);
                 let id = match u32::from_str_radix(t.id.as_str(),16) {
                     Ok(number) => number,
                     Err(e) => {
@@ -113,12 +172,15 @@ impl StdInLines {
                     }
                 };
 
-                let message = match u64::from_str_radix(t.message.as_str(),16) {
-                    Ok(number) => number,
-                    Err(e) => {
-                        panic!("Issue parsing message {} || Got error {}",  t.message,e);
-                    }
-                };
+                let mut message: Vec<u8> = Vec::new();
+                for value in t.message {
+                    match u8::from_str_radix(value.as_str(),16) {
+                        Ok(number) => message.push(number),
+                        Err(e) => {
+                            panic!("Issue parsing message {} || Got error {}",  value,e);
+                        }
+                    };
+                }
 
                 let cycle_time: u64 = t.cycletime.parse().expect("TODO handle errors");
 
