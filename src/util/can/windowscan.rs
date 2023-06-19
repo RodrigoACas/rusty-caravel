@@ -122,11 +122,10 @@ impl IsoTpSocket {
         })
     }
 }
-pub async fn send_isotp_frame(socket: IsoTpSocket, data: &[u8]){
+pub async fn send_isotp_frame(socket: &IsoTpSocket, data: &[u8]){
     info!("[MOCK] [{}] Write {:?}", socket.ifname, data);
 }
 
-static MOCK: [u8;2] = [1,2];
-pub async fn receive_isotp_frame<'a>(mut socket: IsoTpSocket) -> Result<&'a [u8]> {
-    Ok(&MOCK)
+pub async fn receive_isotp_frame(socket: &mut IsoTpSocket) -> Result<Vec<u8>> {
+    Ok(vec![1,2,3])
 }

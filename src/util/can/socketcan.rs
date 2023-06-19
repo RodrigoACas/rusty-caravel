@@ -18,7 +18,7 @@ pub async fn send_can_frame(socket: &CANSocket, frame: CANFrame) {
 
 }
 
-pub async fn send_isotp_frame(socket: IsoTpSocket, data: &[u8]) -> Result<()>{
+pub async fn send_isotp_frame(socket: &IsoTpSocket, data: &[u8]) -> Result<()>{
     match socket.write(data) {
         Ok(_) => {
             debug!("Wrote {:?}", data);
@@ -31,7 +31,7 @@ pub async fn send_isotp_frame(socket: IsoTpSocket, data: &[u8]) -> Result<()>{
     Ok(())
 }
 
-pub async fn receive_isotp_frame(mut socket:IsoTpSocket) -> Result<Vec<u8>> {
+pub async fn receive_isotp_frame(socket:&mut IsoTpSocket) -> Result<Vec<u8>> {
     match socket.read() {
         Ok(val) => return Ok(val.to_vec()),
         Err(e) => return Err(e.into()),

@@ -5,7 +5,7 @@ use itertools::Itertools;
 use std::io::{Read};
 use std::path::{Path};
 use anyhow::Result;
-use log::{info, error};
+use log::{info, error, debug};
 use serde_json::{self, Value};
 use async_recursion::async_recursion;
 use super::canutil::{send_isotp_frame, IsoTpSocket, ExtendedId, StandardId, Id, receive_isotp_frame};
@@ -109,6 +109,17 @@ async fn process_sequence(objects: Vec<Value>, src: &mut Id, dest: &mut Id) -> R
     let mut vars: HashMap<String, Vec<u8>> = HashMap::new();
     let mut testname: String = "Placeholder Test Name".to_owned();
 
+    let req_socket = IsoTpSocket::open(
+        "can0",
+        src.to_owned(), 
+        dest.to_owned(),
+    ).expect("Failed to open ISO-TP socket");
+    let mut res_socket = IsoTpSocket::open(
+        "can0",
+        src.to_owned(), 
+        dest.to_owned(),
+    ).expect("Failed to open ISO-TP socket");
+
     for object in objects {
         if let Value::Object(obj) = object {
             for (_key, value) in obj {
@@ -137,8 +148,8 @@ async fn process_sequence(objects: Vec<Value>, src: &mut Id, dest: &mut Id) -> R
                         }
                     }
                     
-                    process_request(request_vec, &mut vars).await?;
-                    let res = process_response(response_vec, &mut vars, src, dest).await?;
+                    process_request(request_vec, &mut vars, &req_socket).await?;
+                    let res = process_response(response_vec, &mut vars, &mut res_socket).await?;
                     if !res {
                         info!("Messages didn't match");
                         info!("Failed {}", testname);
@@ -159,10 +170,12 @@ async fn process_sequence(objects: Vec<Value>, src: &mut Id, dest: &mut Id) -> R
     Ok(())
 }
 
-async fn process_request(request_vec: Vec<String>, variables:&mut HashMap<String, Vec<u8>>) -> Result<()>{
+async fn process_request(request_vec: Vec<String>, variables:&mut HashMap<String, Vec<u8>>, socket: &IsoTpSocket) -> Result<()>{
     let mut can_frame_vec: Vec<u8>= Vec::new();
 
     for value in request_vec {
+        let value = value.replace(" ", "");
+
         if value.starts_with("0x"){
             can_frame_vec.push(u8::from_str_radix(&value[2..], 16).unwrap());
         }
@@ -180,8 +193,17 @@ async fn process_request(request_vec: Vec<String>, variables:&mut HashMap<String
         }
         else if value.starts_with("LEN(RES(") {
             let len_key = value.chars().count();
-            let key = value[8..len_key-2].to_owned();
-            let var = variables.get(&key).unwrap();
+            let pair = value[8..len_key-2].to_owned();
+
+            let values=  pair.split(",").collect_vec();
+
+            let var = variables.get(values[0]).unwrap();
+            let priv_key_path = values[1];
+            if !Path::new(&priv_key_path).is_file() {
+                panic!("{} isn't a file", &priv_key_path);
+            }
+
+            
 
             // Missing solving CHALLENGE in var
             let mut sol=var.to_owned();
@@ -197,26 +219,22 @@ async fn process_request(request_vec: Vec<String>, variables:&mut HashMap<String
 
     //println!("Request frame: {:?}", can_frame_vec);
 
-    let socket = IsoTpSocket::open(
-        "can0",
-         StandardId::new(0x123).unwrap(), 
-         StandardId::new(0x321).unwrap(),
-    ).unwrap();
+
     send_isotp_frame(socket, can_frame_vec.as_slice()).await;
 
     Ok(())
 }
 
-async fn process_response(response_vec: Vec<String>, variables:&mut HashMap<String, Vec<u8>>, src:&mut Id, dest:&mut Id) -> Result<bool>{
-    dbg!("Ids that reached response: {:?} {:?}", &src, &dest);
+async fn process_response(response_vec: Vec<String>, variables:&mut HashMap<String, Vec<u8>>, socket: &mut IsoTpSocket) -> Result<bool>{    
+    let mut message: Vec<u8>;
+    loop {
+        message=receive_isotp_frame(socket).await?;
+
+        if message[0]==127 && message[2]==120 {continue;} //ignore NRC 78 case
+        break;
+    }
     
-    let mut socket = IsoTpSocket::open(
-        "can0",
-        src.to_owned(), 
-        dest.to_owned(),
-    ).unwrap();
-    let message = receive_isotp_frame(socket).await?;
-    
+    debug!("Received message: {:?}", message);
     ///////////////Testing/////////////////////
     // let message: Vec<u8> = vec![105, 3, 17, 0, 2, 1, 1, 0, 0];
     // // let message = message_vec.as_slice();

@@ -51,7 +51,7 @@ impl SenderCAN {
             SenderCANMessages::SendIsotp { src, dest, message } => {
                 let socket = IsoTpSocket::open("can0", src, dest).expect("Couldn't open ISO-TP socket");
 
-                send_isotp_frame(socket, message.as_slice()).await;
+                send_isotp_frame(&socket, message.as_slice()).await;
 
             }
         }

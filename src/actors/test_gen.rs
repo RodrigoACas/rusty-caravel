@@ -1,4 +1,4 @@
-use log::{info,debug};
+use log::{info};
 use tokio::sync::mpsc;
 use crate::util::testgen_util;
 
@@ -21,7 +21,6 @@ impl TestGen {
             TestGenMessages::FilePath {
                 file_path
             } => {
-                debug!("File path is {file_path}");
                 testgen_util::exec_test(file_path).await.expect("Failed executing test");
             }
         }
