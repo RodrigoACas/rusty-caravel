@@ -1,14 +1,16 @@
 use std::collections::HashMap;
 use std::fs::{File, self};
+use std::process::{Command, Stdio};
 use hex;
 use itertools::Itertools;
-use std::io::{Read};
+use std::io::{Read, Write};
 use std::path::{Path};
 use anyhow::Result;
 use log::{info, error, debug};
 use serde_json::{self, Value};
 use async_recursion::async_recursion;
-use super::canutil::{send_isotp_frame, IsoTpSocket, ExtendedId, StandardId, Id, receive_isotp_frame};
+
+use super::canutil::{send_isotp_frame, IsoTpSocket, ExtendedId, StandardId, Id, receive_isotp_frame, FlowControlOptions, send_can_frame};
 
 pub async fn exec_test(file_path: String) -> Result<()>{
     let mut file = File::open(file_path).expect("Couldn't open test file");
@@ -185,10 +187,7 @@ async fn process_request(request_vec: Vec<String>, variables:&mut HashMap<String
                 panic!("{} isn't a file", &value[5..value_len-1]);
             }
         
-            let cert_string = fs::read_to_string(&value[5..value_len-1]).unwrap();
-            let cert_string= cert_string.replace("\r\n", "");
-            let cert_string= cert_string.replace(" ", "");
-            let mut cert_vec: Vec<u8> = hex::decode(cert_string).unwrap();
+            let mut cert_vec = fs::read(&value[5..value_len-1]).expect("failed to read certificate");
             can_frame_vec.append(&mut cert_vec);
         }
         else if value.starts_with("LEN(RES(") {
@@ -197,35 +196,55 @@ async fn process_request(request_vec: Vec<String>, variables:&mut HashMap<String
 
             let values=  pair.split(",").collect_vec();
 
-            let var = variables.get(values[0]).unwrap();
+            let challenge = variables.get(values[0]).unwrap();
             let priv_key_path = values[1];
             if !Path::new(&priv_key_path).is_file() {
                 panic!("{} isn't a file", &priv_key_path);
             }
+            let mut openssl_cmd = Command::new("openssl");
+            openssl_cmd.args(&[
+                    "dgst",
+                    "-sha256",
+                    "-sign",
+                    priv_key_path,
+                    "-out",
+                    "signature.bin",
+                ])
+                .stdin(Stdio::piped());
 
-            
+            let mut openssl_process = openssl_cmd.spawn().expect("Failed to execute command");
 
-            // Missing solving CHALLENGE in var
-            let mut sol=var.to_owned();
+            if let Some(mut stdin) = openssl_process.stdin.take() {
+                stdin.write_all(&challenge).expect("Failed to write challenge data to openssl command");
+            }
 
-            let len_var = sol.len() as u16;
+            let status = openssl_process.wait().expect("Failed to wait for command execution");
+            if !status.success() {
+                panic!("Command execution failed");
+            }
+
+            let mut signature: Vec<u8> = fs::read("signature.bin").expect("Couldn't read signature");
+
+            let len_var = signature.len() as u16;
             can_frame_vec.push(((len_var & 65280)>>8) as u8);
             can_frame_vec.push((len_var & 255) as u8);
 
-            can_frame_vec.append(&mut sol);
+            can_frame_vec.append(&mut signature);
+            
+            fs::remove_file("signature.bin")?;
         }
 
     }
 
     //println!("Request frame: {:?}", can_frame_vec);
-
-
-    send_isotp_frame(socket, can_frame_vec.as_slice()).await;
+    // send_isotp_frame(socket, can_frame_vec.as_slice()).await;
+    
 
     Ok(())
 }
 
 async fn process_response(response_vec: Vec<String>, variables:&mut HashMap<String, Vec<u8>>, socket: &mut IsoTpSocket) -> Result<bool>{    
+    debug!("Reached response");
     let mut message: Vec<u8>;
     loop {
         message=receive_isotp_frame(socket).await?;

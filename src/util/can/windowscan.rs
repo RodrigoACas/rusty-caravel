@@ -79,6 +79,12 @@ pub struct StandardId(u16);
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub struct ExtendedId(u32);
 
+pub struct FlowControlOptions;
+impl FlowControlOptions {
+    pub fn new(bs: u8, stmin: u8, wftmax: u8) -> Self {
+        Self
+    }
+}
 impl StandardId {
     pub fn new(raw :u16) -> Option<Self> {
         return Some(Self(raw));
@@ -112,6 +118,9 @@ pub struct IsoTpSocket {
     ifname: String,
     src: Id,
     dest: Id,
+    isotp_options: Option<String>, 
+    rx_flow_control_options: Option<FlowControlOptions>,
+    link_layer_options: Option<String>,
 }
 impl IsoTpSocket {
     pub fn open(ifname: &str, src:impl Into<Id>, dest: impl Into<Id>) -> Result<Self> {
@@ -119,6 +128,26 @@ impl IsoTpSocket {
             ifname:ifname.to_owned(), 
             src: src.into(), 
             dest: dest.into(),
+            isotp_options: None,
+            rx_flow_control_options: None,
+            link_layer_options: None,
+        })
+    }
+    pub fn open_with_opts(ifname: &str, 
+                            src:impl Into<Id>, 
+                            dest: impl Into<Id>, 
+                            isotp_options: Option<String>, 
+                            rx_flow_control_options: Option<FlowControlOptions>,
+                            link_layer_options: Option<String>,
+        ) -> Result<Self> {
+
+        Ok(Self { 
+            ifname:ifname.to_owned(), 
+            src: src.into(), 
+            dest: dest.into(),
+            isotp_options: None,
+            rx_flow_control_options: None,
+            link_layer_options: None,
         })
     }
 }
