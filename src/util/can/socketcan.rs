@@ -9,7 +9,7 @@ pub use socketcan_isotp::{Id, IsoTpSocket, StandardId, ExtendedId, FlowControlOp
 pub async fn send_can_frame(socket: &CANSocket, frame: CANFrame) {
     match socket.write_frame(frame).expect("Writing is busted").await {
         Ok(_) => {
-            debug!("Wrote {:?} # {:?}", socket, frame);
+            //debug!("Wrote {:?} # {:?}", socket, frame);
         }
         Err(e) => {
             debug!("Failed writing {:?} # {:?} Error: {}", socket, frame, e);

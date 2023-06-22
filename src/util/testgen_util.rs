@@ -10,7 +10,8 @@ use log::{info, error, debug};
 use serde_json::{self, Value};
 use async_recursion::async_recursion;
 
-use super::canutil::{send_isotp_frame, IsoTpSocket, ExtendedId, StandardId, Id, receive_isotp_frame, FlowControlOptions, send_can_frame};
+
+use super::canutil::{send_isotp_frame, IsoTpSocket, ExtendedId, StandardId, Id, receive_isotp_frame, FlowControlOptions, send_can_frame, CANSocket, CANFrame};
 
 pub async fn exec_test(file_path: String) -> Result<()>{
     let mut file = File::open(file_path).expect("Couldn't open test file");
@@ -19,21 +20,22 @@ pub async fn exec_test(file_path: String) -> Result<()>{
 
     let json: Value = serde_json::from_str(&contents)?;
 
-    let mut src: Id;
-    let mut dest: Id; 
+    let mut dest:u32=0;
+    let mut src_isotp: Id;
+    let mut dest_isotp: Id; 
     if let Some(struc) = StandardId::new(0){
-        src=Id::Standard(struc);
-        dest=Id::Standard(struc.clone());
+        src_isotp=Id::Standard(struc);
+        dest_isotp=Id::Standard(struc.clone());
     } else {panic!("Couldn't create ids");}
     
-    process_json(json, None, &mut src, &mut dest).await?;
+    process_json(json, None, &mut src_isotp, &mut dest_isotp, &mut dest).await?;
 
 
     Ok(())
 }
 
 #[async_recursion]
-async fn process_json(json: Value, key_op:Option<String>, src: &mut Id, dest: &mut Id) -> Result<()>{
+async fn process_json(json: Value, key_op:Option<String>, src_isotp: &mut Id, dest_isotp: &mut Id, dest:&mut u32) -> Result<()>{
     match json {
         Value::String(value) => {
             if let Some(key) = key_op {
@@ -43,29 +45,29 @@ async fn process_json(json: Value, key_op:Option<String>, src: &mut Id, dest: &m
                     }
                     "ID" => {
                         let ids= value.split(',').collect_vec();
-                        
+                        *dest=u32::from_str_radix(&ids[2][2..],16).unwrap();
                         match ids[0] {
                             "Extended" => {
                                 let src_struc_opt = ExtendedId::new(u32::from_str_radix(&ids[1][2..],16).unwrap());
                                 if let Some(src_struc) = src_struc_opt {
-                                    *src= Id::Extended(src_struc);
+                                    *src_isotp= Id::Extended(src_struc);
                                 } else {panic!("Panicked creating id from {}", ids[1])}
                                 
                                 let dest_struc_opt = ExtendedId::new(u32::from_str_radix(&ids[2][2..],16).unwrap());
                                 if let Some(dest_struc) = dest_struc_opt {
-                                    *dest = Id::Extended(dest_struc);
+                                    *dest_isotp = Id::Extended(dest_struc);
                                 } else {panic!("Panicked creating id from {}", ids[2])}
                                 
                             }
                             "Standard" => {
                                 let src_struc_opt = StandardId::new(u16::from_str_radix(&ids[1][2..],16).unwrap());
                                 if let Some(src_struc) = src_struc_opt {
-                                    *src= Id::Standard(src_struc);
+                                    *src_isotp= Id::Standard(src_struc);
                                 } else {panic!("Panicked creating id from {}", ids[1])}
                                 
                                 let dest_struc_opt = StandardId::new(u16::from_str_radix(&ids[2][2..],16).unwrap());
                                 if let Some(dest_struc) = dest_struc_opt {
-                                    *dest = Id::Standard(dest_struc);
+                                    *dest_isotp = Id::Standard(dest_struc);
                                 } else {panic!("Panicked creating id from {}", ids[2])}
                             }
                             _ => {
@@ -82,11 +84,11 @@ async fn process_json(json: Value, key_op:Option<String>, src: &mut Id, dest: &m
                 match key.as_str(){
                     "Tests" => {
                         for value in values{
-                            process_json(value, None, src, dest).await?;
+                            process_json(value, None, src_isotp, dest_isotp, dest).await?;
                         }
                     }
                     "Sequence" => {
-                        process_sequence(values, src, dest).await.expect("Failed at processing sequence");                        
+                        process_sequence(values, src_isotp, dest_isotp, dest).await.expect("Failed at processing sequence");                        
                                                 
                     }
                     _ => {}
@@ -96,7 +98,7 @@ async fn process_json(json: Value, key_op:Option<String>, src: &mut Id, dest: &m
         }
         Value::Object(obj) => {
             for (key, value) in obj {
-                process_json(value, Some(key), src, dest).await?;
+                process_json(value, Some(key), src_isotp, dest_isotp, dest).await?;
             } 
         }
         _ => {}
@@ -105,21 +107,17 @@ async fn process_json(json: Value, key_op:Option<String>, src: &mut Id, dest: &m
     Ok(())
 }
 
-async fn process_sequence(objects: Vec<Value>, src: &mut Id, dest: &mut Id) -> Result<()> {
+async fn process_sequence(objects: Vec<Value>, src_isotp: &mut Id, dest_isotp: &mut Id, dest: &mut u32) -> Result<()> {
     info!("Starting to process sequence");
 
     let mut vars: HashMap<String, Vec<u8>> = HashMap::new();
     let mut testname: String = "Placeholder Test Name".to_owned();
 
-    let req_socket = IsoTpSocket::open(
-        "can0",
-        src.to_owned(), 
-        dest.to_owned(),
-    ).expect("Failed to open ISO-TP socket");
+    let req_socket = CANSocket::open("can0").expect("Failed to open request socket");
     let mut res_socket = IsoTpSocket::open(
         "can0",
-        src.to_owned(), 
-        dest.to_owned(),
+        src_isotp.to_owned(), 
+        dest_isotp.to_owned(),
     ).expect("Failed to open ISO-TP socket");
 
     for object in objects {
@@ -150,7 +148,7 @@ async fn process_sequence(objects: Vec<Value>, src: &mut Id, dest: &mut Id) -> R
                         }
                     }
                     
-                    process_request(request_vec, &mut vars, &req_socket).await?;
+                    process_request(request_vec, &mut vars, &req_socket, dest).await?;
                     let res = process_response(response_vec, &mut vars, &mut res_socket).await?;
                     if !res {
                         info!("Messages didn't match");
@@ -172,9 +170,9 @@ async fn process_sequence(objects: Vec<Value>, src: &mut Id, dest: &mut Id) -> R
     Ok(())
 }
 
-async fn process_request(request_vec: Vec<String>, variables:&mut HashMap<String, Vec<u8>>, socket: &IsoTpSocket) -> Result<()>{
+async fn process_request(request_vec: Vec<String>, variables:&mut HashMap<String, Vec<u8>>, socket: &CANSocket, id:&u32) -> Result<()>{
     let mut can_frame_vec: Vec<u8>= Vec::new();
-
+    
     for value in request_vec {
         let value = value.replace(" ", "");
 
@@ -201,6 +199,10 @@ async fn process_request(request_vec: Vec<String>, variables:&mut HashMap<String
             if !Path::new(&priv_key_path).is_file() {
                 panic!("{} isn't a file", &priv_key_path);
             }
+
+            let mut file = File::create("challenge").unwrap();
+            file.write_all(challenge.as_slice())?;
+
             let mut openssl_cmd = Command::new("openssl");
             openssl_cmd.args(&[
                     "dgst",
@@ -208,20 +210,10 @@ async fn process_request(request_vec: Vec<String>, variables:&mut HashMap<String
                     "-sign",
                     priv_key_path,
                     "-out",
-                    "signature.bin",
+                    "./signature.bin",
+                    "./challenge"
                 ])
-                .stdin(Stdio::piped());
-
-            let mut openssl_process = openssl_cmd.spawn().expect("Failed to execute command");
-
-            if let Some(mut stdin) = openssl_process.stdin.take() {
-                stdin.write_all(&challenge).expect("Failed to write challenge data to openssl command");
-            }
-
-            let status = openssl_process.wait().expect("Failed to wait for command execution");
-            if !status.success() {
-                panic!("Command execution failed");
-            }
+                .output().expect("Couldn't execute openssl command");
 
             let mut signature: Vec<u8> = fs::read("signature.bin").expect("Couldn't read signature");
 
@@ -231,14 +223,52 @@ async fn process_request(request_vec: Vec<String>, variables:&mut HashMap<String
 
             can_frame_vec.append(&mut signature);
             
-            fs::remove_file("signature.bin")?;
+            // fs::remove_file("signature.bin")?;
+            // fs::remove_file("challenge")?;
         }
 
     }
 
-    //println!("Request frame: {:?}", can_frame_vec);
+    println!("Request frame: {:?}", can_frame_vec);
     // send_isotp_frame(socket, can_frame_vec.as_slice()).await;
-    
+    if can_frame_vec.len()>7 { //multi frame case
+        let byte1 = ((1 as u8)<<4) | ((((can_frame_vec.len() as u16) & 0xf00)>>8) as u8);
+        let byte2 = ((can_frame_vec.len() as u16) & 0x0ff) as u8;
+        let mut dummy: Vec<u8> = vec![byte1, byte2];
+        dummy.extend_from_slice(&can_frame_vec[0..6]);
+        let frame=CANFrame::new(*id, dummy.as_slice(), false, false).expect("Couldn't construct SF");
+        send_can_frame(socket, frame).await;
+
+        std::thread::sleep(std::time::Duration::from_millis(5));
+
+        let n_cfs = ((can_frame_vec.len()-6) as u16)/7+1; //number of consecutive frames to be sent
+        for i in 0..n_cfs{
+            let frame_index = if i % 16 == 15 { 0 } else { (i % 16) + 1 };
+        
+            let mut dummy:Vec<u8> = vec![0x20+frame_index as u8];
+            if i==n_cfs-1{//last frame
+                dummy.extend_from_slice(&can_frame_vec[6+7*i as usize..]);
+                while dummy.len()<8 {
+                    dummy.push(0 as u8);
+                }
+            }
+            else {
+                dummy.extend_from_slice(&can_frame_vec[6+7*i as usize..13+7*i as usize]);
+            }
+            
+            let frame = CANFrame::new(*id, dummy.as_slice(), false, false).expect("Couldn't construct CF");
+            send_can_frame(socket, frame).await;
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+    }
+    else{ //single frame case
+        let mut dummy: Vec<u8> = vec![can_frame_vec.len() as u8];
+        dummy.append(&mut can_frame_vec);
+
+        while dummy.len()<8 {dummy.push(0 as u8)}
+        let frame = CANFrame::new(*id, dummy.as_slice(), false, false).expect("Couldn't mount single frame");
+        send_can_frame(socket, frame).await;
+    } 
 
     Ok(())
 }
@@ -257,11 +287,13 @@ async fn process_response(response_vec: Vec<String>, variables:&mut HashMap<Stri
     ///////////////Testing/////////////////////
     // let message: Vec<u8> = vec![105, 3, 17, 0, 2, 1, 1, 0, 0];
     // // let message = message_vec.as_slice();
-    
+    let mut skip_iter:bool=false;
     let mut i=0;
     'mainloop: for value in response_vec {
         let mut acceptable_values: Vec<u8> = Vec::new();
         let mut options: Vec<String> = Vec::new();
+
+        if skip_iter {skip_iter=false; continue;}
 
         if value.contains('|') {
             let value = value.replace(" ", "");
@@ -286,7 +318,7 @@ async fn process_response(response_vec: Vec<String>, variables:&mut HashMap<Stri
                 i+=2+var_len as usize;
     
                 variables.insert(map_key, var_vec);
-
+                skip_iter=true;
                 continue 'mainloop;
             }
             else if option.starts_with("RANGE(") {
