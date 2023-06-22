@@ -89,7 +89,7 @@ async fn process_json(json: Value, key_op:Option<String>, src_isotp: &mut Id, de
                     }
                     "Sequence" => {
                         process_sequence(values, src_isotp, dest_isotp, dest).await.expect("Failed at processing sequence");                        
-                                                
+                        std::thread::sleep(std::time::Duration::from_millis(50));                 
                     }
                     _ => {}
                 }
@@ -172,7 +172,8 @@ async fn process_sequence(objects: Vec<Value>, src_isotp: &mut Id, dest_isotp: &
 
 async fn process_request(request_vec: Vec<String>, variables:&mut HashMap<String, Vec<u8>>, socket: &CANSocket, id:&u32) -> Result<()>{
     let mut can_frame_vec: Vec<u8>= Vec::new();
-    
+    let mut len_next_flag = false;
+
     for value in request_vec {
         let value = value.replace(" ", "");
 
@@ -217,19 +218,33 @@ async fn process_request(request_vec: Vec<String>, variables:&mut HashMap<String
 
             let mut signature: Vec<u8> = fs::read("signature.bin").expect("Couldn't read signature");
 
+            // dbg!("signature is {}", signature.len());
+
+        
             let len_var = signature.len() as u16;
+
+            if len_next_flag {
+                // dbg!("Introducing length of next field");
+                let len_nextfield = (2+len_var).to_be_bytes();
+                can_frame_vec.extend_from_slice(&len_nextfield);
+                len_next_flag=false;
+            }
             can_frame_vec.push(((len_var & 65280)>>8) as u8);
             can_frame_vec.push((len_var & 255) as u8);
 
             can_frame_vec.append(&mut signature);
             
-            // fs::remove_file("signature.bin")?;
-            // fs::remove_file("challenge")?;
+            
+            fs::remove_file("signature.bin")?;
+            fs::remove_file("challenge")?;
         }
-
+        else if value.starts_with("LEN_NEXT") {
+            len_next_flag=true;
+        }
     }
 
-    println!("Request frame: {:?}", can_frame_vec);
+    
+    //println!("Request frame: {:?}", can_frame_vec);
     // send_isotp_frame(socket, can_frame_vec.as_slice()).await;
     if can_frame_vec.len()>7 { //multi frame case
         let byte1 = ((1 as u8)<<4) | ((((can_frame_vec.len() as u16) & 0xf00)>>8) as u8);
@@ -274,7 +289,7 @@ async fn process_request(request_vec: Vec<String>, variables:&mut HashMap<String
 }
 
 async fn process_response(response_vec: Vec<String>, variables:&mut HashMap<String, Vec<u8>>, socket: &mut IsoTpSocket) -> Result<bool>{    
-    debug!("Reached response");
+    // debug!("Reached response");
     let mut message: Vec<u8>;
     loop {
         message=receive_isotp_frame(socket).await?;
@@ -283,7 +298,7 @@ async fn process_response(response_vec: Vec<String>, variables:&mut HashMap<Stri
         break;
     }
     
-    debug!("Received message: {:?}", message);
+    //debug!("Received message: {:?}", message);
     ///////////////Testing/////////////////////
     // let message: Vec<u8> = vec![105, 3, 17, 0, 2, 1, 1, 0, 0];
     // // let message = message_vec.as_slice();
