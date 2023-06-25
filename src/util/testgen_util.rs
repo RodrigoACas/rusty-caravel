@@ -322,6 +322,8 @@ async fn process_response(response_vec: Vec<String>, variables:&mut HashMap<Stri
         else {options.push(value);}
 
         for option in options {
+            let option=option.replace(" ", "");
+            
             if option.starts_with("0x"){
                 acceptable_values.push(u8::from_str_radix(&option[2..], 16).expect("Unknown value {option}"));               
             }
